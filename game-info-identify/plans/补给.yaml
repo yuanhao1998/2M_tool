@@ -1,0 +1,149 @@
+name: "补给"
+
+hotkeys:
+  start: f5
+  pause: f6
+  stop: f7
+  exit: esc
+repeat:
+  times: 73                               # 账户总数
+  switch:
+    - action: click
+      name: "切换下一个账户"
+      target: [5075, 1138]
+      wait_after: 3
+    - action: wait_match                  # 等待新账户画面加载
+      match_region: [4724, 2689, 4807, 2760]
+      reference: "images/loaded.png"
+      threshold: 0.85
+      max_retries: 10
+      interval: 2
+  steps:
+    # ====== 步骤1 ======
+    - action: click
+      name: "回程"
+      target: [1141, 2501]
+      wait_after: 5
+
+    # ====== 步骤2 ======
+    - action: wait_match
+      name: "检测回程加载"
+      match_region: [4724, 2689, 4807, 2760]
+      reference: "images/loaded.png"
+      threshold: 0.85
+      max_retries: 10
+      interval: 2
+      wait_after: 2
+
+    # ====== 步骤3 ======
+    - action: match_click
+      name: "判断是否已打开商人列表"
+      match_region: [200, 416, 268, 482]
+      reference: "images/supplies/store_icon.png"
+      threshold: 0.85
+      target: [374, 442]  # 点击商人
+      max_retries: 3
+      interval: 1
+      wait_after: 2
+      goto: 5
+
+    # ====== 步骤4 ======
+    - action: click
+      name: "打开商人列表"
+      target: [995, 710]
+      wait_after: 2
+      goto: 3
+
+    # ====== 步骤5 ======
+    - action: click_until_match
+      name: "验证是否走到商人身边"
+      match_region: [256, 1070, 381, 1296]
+      reference: "images/supplies/supplies_check.png"
+      threshold: 0.85
+      max_clicks: 50
+      interval: 2
+      then_click: [3976, 2536]            # 点击补给
+      wait_after: 2
+      on_fail:
+        action: stop
+
+    # ====== 步骤6 ======
+    - action: match_click
+      name: "点击购买"
+      match_region: [4303, 2442, 4908, 2625]
+      reference: "images/supplies/buy.png"
+      threshold: 0.85
+      target: [4583, 2545]  
+      max_retries: 3
+      interval: 1
+      wait_after: 2
+
+    # ====== 步骤7 ======
+    - action: match_click
+      name: "点击确认"
+      match_region: [2538, 1795, 3324, 1971]
+      reference: "images/supplies/buy_confirm.png"
+      threshold: 0.85
+      target: [2936, 1884]
+      max_retries: 3
+      interval: 1
+      wait_after: 2
+
+    # ====== 步骤8 ======
+    - action: click_until_match
+      name: "关闭报错"
+      match_region: [2148, 1792, 2927, 1974]
+      click_target: [2524, 1880]          # 关闭报错按钮
+      reference: "images/supplies/buy_error.png"
+      threshold: 0.85
+      max_clicks: 5
+      interval: 2
+      then_click: [4849, 214]            # 关闭补给页面
+      wait_after: 2
+      on_fail:
+        action: click   # 未匹配到直接关闭补给页面
+        target: [4849, 214]
+        wait_after: 2
+
+    # ====== 步骤9 ======
+    - action: click
+      name: "打开传送列表"
+      target: [997, 444]
+      wait_after: 2
+
+    # ====== 步骤10 ======
+    - action: match_click
+      name: "匹配传送并点击第一个目标"
+      match_region: [1018, 632, 1296, 762]
+      reference: "images/supplies/tp_check.png"
+      threshold: 0.85
+      target: [647, 920]
+      max_retries: 3
+      interval: 1
+      wait_after: 2
+      on_fail:
+        action: stop
+
+    # ====== 步骤11 ======
+    - action: match_click
+      name: "匹配确认按钮并点击"
+      match_region: [1148, 1054, 1240, 1157]
+      reference: "images/supplies/tp_confirm.png"
+      threshold: 0.85
+      target: [1190, 1115]
+      max_retries: 3
+      interval: 1
+      wait_after: 5
+      on_fail:
+        action: stop
+
+    # ====== 步骤12 ======
+    - action: match_click
+      name: "开启自动攻击"
+      match_region: [4724, 2689, 4807, 2760]
+      reference: "images/loaded.png"
+      threshold: 0.85
+      target: [4089, 1465]
+      max_retries: 5
+      interval: 2
+      wait_after: 2

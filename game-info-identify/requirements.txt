@@ -1,0 +1,5 @@
+Pillow>=10.0.0
+easyocr>=1.7.0
+pyautogui>=0.9.54
+pynput>=1.7.6
+ruamel.yaml>=0.18.0

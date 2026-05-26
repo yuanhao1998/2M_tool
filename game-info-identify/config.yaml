@@ -1,0 +1,41 @@
+# 云手机游戏钻石识别统计工具 - 配置文件
+# 所有坐标基于全屏截图，单位为像素
+
+# --- 截图区域 ---
+capture:
+  # 钻石数量区域坐标 (left, top, right, bottom)
+  diamond_region:
+  - 2291
+  - 127
+  - 2475
+  - 237
+  name_region:
+  - 14
+  - 14
+  - 82
+  - 56
+switch:
+  # 切换下一个账户的按钮点击位置 (x, y)
+  next_button:
+  - 5077
+  - 1136
+  wait_after_switch: 2.0
+
+# --- OCR 设置 ---
+ocr:
+  # 数字识别：只识别数字字符，提高准确率
+  digits_only: true
+  # 失败重试次数
+  max_retries: 2
+
+# --- 统计设置 ---
+stats:
+  # 要统计的账户总数，0 表示无限循环直到手动停止
+  total_accounts: 73
+
+# --- 热键设置 ---
+hotkeys:
+  start: "f5"    # 开始/继续
+  pause: "f6"    # 暂停
+  stop: "f7"     # 停止
+  exit: "esc"    # 紧急退出

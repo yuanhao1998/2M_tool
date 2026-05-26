@@ -1,0 +1,182 @@
+# ============================================================
+# 视觉自动化规划文件 — 完整语法示例
+# 用法: python run.py → 选择 2 → 选择 example.yaml
+# ============================================================
+name: "完整语法示例"
+
+hotkeys:
+  start: f5
+  pause: f6
+  stop: f7
+  exit: esc
+
+# ---- 多账户循环（可选）----
+repeat:
+  times: 73                               # 账户总数
+  switch:                                 # 每轮结束后切换账户
+    - action: click
+      name: "点击下一个账户"
+      target: [5077, 1136]
+      wait_after: 2
+    - action: wait_match
+      name: "等待画面加载"
+      match_region: [2291, 127, 2475, 237]
+      reference: "images/loaded.png"
+      threshold: 0.85
+      max_retries: 30
+      interval: 1
+
+steps:
+  # ====== action: click — 直接点击 ======
+  - action: click
+    name: "打开商店"
+    target: [1900, 850]
+    wait_after: 1                        # 点击后等待(秒)
+
+  # ====== action: wait — 纯等待 ======
+  - action: wait
+    name: "等待 3 秒"
+    duration: 3
+
+  # ====== action: wait_match — 等待画面出现 ======
+  - action: wait_match
+    name: "等待商店界面加载"
+    match_region: [1800, 800, 2000, 900]
+    reference: "images/shop_menu.png"    # 图片匹配
+    # match_text: "商店"                 # 或文字匹配（二选一）
+    threshold: 0.85
+    max_retries: 30
+    interval: 1
+    on_fail:                             # 匹配超时处理
+      action: click                      # click / wait / stop / 复杂动作
+      target: [100, 200]
+      goto: 5                            # 跳转到步骤5
+
+  # ====== action: match_click — 匹配后点击 ======
+  - action: match_click
+    name: "匹配商店图标并点击"
+    match_region: [900, 600, 1100, 700]
+    reference: "images/shop_icon.png"
+    threshold: 0.85
+    target: [1000, 650]                  # 可选：不填则用 OCR 定位文字坐标
+    max_retries: 10
+    interval: 1
+    wait_after: 2
+    on_fail:
+      action: click
+      target: [1200, 200]                # 先点关闭按钮
+      retry: true                        # 再重试原匹配
+
+  # ====== 成功跳转 — goto ======
+  - action: match_click
+    name: "检测弹窗"
+    match_region: [100, 200, 300, 400]
+    reference: "images/popup.png"
+    target: [200, 300]
+    goto: 7                              # 匹配成功 → 跳到步骤7
+    on_fail:
+      goto: 3                            # 失败 → 跳到步骤3
+
+  # ====== action: click_until_match — 点击直到匹配 ======
+  - action: click_until_match
+    name: "翻页直到找到目标"
+    click_target: [1400, 800]            # 可选：不填则不点击
+    match_region: [500, 200, 800, 400]
+    reference: "images/target.png"
+    threshold: 0.85
+    max_clicks: 50
+    interval: 0.5
+    then_click: [700, 300]               # 匹配后点击（可选）
+    wait_after: 1
+    on_fail:
+      action: stop
+
+  # ====== click_until_match + check_first — 等待消失 ======
+  - action: click_until_match
+    name: "等待加载图标消失"
+    match_region: [100, 200, 300, 400]
+    reference: "images/loading.png"
+    check_first: true                    # 先检测再点击：存在→点击消除，消失→结束
+    click_target: [150, 250]             # 可选
+    max_clicks: 30
+    interval: 1
+    then_click: [400, 500]               # 消失后点击
+    on_fail:
+      action: stop
+
+  # ====== action: loop — 固定次数循环 ======
+  - action: loop
+    name: "每个账户执行12次"
+    times: 12
+    steps:
+      # 子步骤支持 goto 跳转
+      - action: click
+        name: "步骤A"
+        target: [100, 200]
+      - action: wait_match
+        name: "步骤B"
+        match_region: [300, 400, 500, 600]
+        reference: "images/step_b.png"
+        on_fail:
+          goto: 3                        # 跳到子步骤3
+
+  # ====== action: while_match — 条件循环（单条件）=====
+  - action: while_match
+    name: "循环点击直到弹窗消失"
+    match_region: [100, 200, 300, 400]
+    reference: "images/popup.png"
+    max_loops: 50
+    interval: 1
+    steps:                               # 匹配时执行的步骤
+      - action: click
+        name: "关闭弹窗"
+        target: [500, 600]
+        wait_after: 0.5
+    on_fail:
+      action: stop
+
+  # ====== action: while_match — 多 case ======
+  - action: while_match
+    name: "检测多种情况"
+    max_loops: 100
+    interval: 1
+    cases:
+      # case1: 任务完成
+      - match_region: [100, 200, 300, 400]
+        reference: "images/done.png"
+        steps:
+          - action: click
+            name: "领取奖励"
+            target: [500, 600]
+            goto: [2, 1]                 # 跳到 case2 子步骤1
+
+      # case2: 任务进行中
+      - match_region: [100, 200, 300, 400]
+        reference: "images/in_progress.png"
+        steps:
+          - action: wait
+            duration: 2
+
+      # case3: 可领取
+      - match_region: [100, 200, 300, 400]
+        reference: "images/claimable.png"
+        steps:
+          - action: click
+            target: [700, 800]
+    on_fail:
+      action: stop
+
+  # ====== 嵌套 goto 语法 ======
+  # goto: N              → 当前层级跳到步骤 N
+  # goto: [N, M]         → 跳到外层步骤 N，从 loop/while_match 子步骤 M 开始
+  # goto: [N, C, M]      → 跳到外层步骤 N，while_match 的 case C，子步骤 M
+  #
+  # on_fail 列表格式：支持嵌套完整步骤
+  # on_fail:
+  #   - action: match_click
+  #     match_region: [...]
+  #     reference: "images/fallback.png"
+  #     target: [x, y]
+  #   - action: click
+  #     target: [x2, y2]
+  #     goto: 10

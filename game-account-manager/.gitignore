@@ -1,0 +1,30 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Data (keep dir, ignore db files if desired)
+# data/*.db
+
+# Superpowers
+.superpowers/
+
+# Other projects
+cacherpc/
+MxPythonWeb/
+mxsoftpy/
+webwork_new/
