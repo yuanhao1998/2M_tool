@@ -1,5 +1,7 @@
 Pillow>=10.0.0
 easyocr>=1.7.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
 pyautogui>=0.9.54
 pynput>=1.7.6
 ruamel.yaml>=0.18.0

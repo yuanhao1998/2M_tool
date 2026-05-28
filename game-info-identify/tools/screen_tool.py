@@ -1,36 +1,49 @@
-"""截图坐标辅助工具：查看坐标、裁剪参考图、生成 YAML 动作片段。
+"""截图坐标辅助工具：查看坐标、裁剪参考图、生成代码片段。
 
 用法:
-  1. 截全屏图: python -c "from PIL import ImageGrab; ImageGrab.grab().save('screen.png')"
-  2. 打开工具: python screen_tool.py screen.png
+  1. 提前截全屏图: python screen_tool.py                   (按 F5 实时截图)
+  2. 打开已有截图: python screen_tool.py screen.png          (查看静态截图)
 
 操作:
+  F5        → 截取当前屏幕并加载
   鼠标悬停  → 实时显示物理像素坐标
   拖拽框选  → 显示区域坐标，按 R 保存裁剪图为参考图，按 C 复制坐标
   滚轮      → 缩放
   Ctrl+拖拽 → 平移
-  Space     → 取当前坐标作为点击目标，生成 YAML 动作片段
+  Space     → 取当前坐标生成 Python DSL 代码片段
   ESC       → 退出
 """
 
+import queue
 import sys
+import threading
 import tkinter as tk
 from pathlib import Path
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageGrab, ImageTk
+from pynput import keyboard
 
 
 class ScreenTool:
-    def __init__(self, image_path: str):
-        self.root = tk.Tk()
-        self.root.title(f"坐标工具 — {Path(image_path).name} — 滚轮缩放 Ctrl+拖拽平移")
+    def __init__(self, image_path: str | None = None):
+        self._mode = "file" if image_path else "live"
+        self._capture_queue: queue.Queue[Image.Image] = queue.Queue()
+        self._listener: keyboard.Listener | None = None
 
-        self.pil_image = Image.open(image_path)
+        self.root = tk.Tk()
+        title = f"坐标工具 — {Path(image_path).name}" if image_path else "坐标工具 — 按 F5 截取屏幕"
+        self.root.title(title)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        if image_path:
+            self.pil_image = Image.open(image_path)
+        else:
+            self.pil_image = self._placeholder_image()
+
         self.orig_w = self.pil_image.width
         self.orig_h = self.pil_image.height
         self.scale = 1.0
 
-        # 窗口大小
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
         win_w = min(screen_w, int(screen_w * 0.9))
@@ -61,37 +74,34 @@ class ScreenTool:
 
         self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW, tags="bg")
 
-        # 信息栏
-        self.info_var = tk.StringVar(value="悬停查看坐标 | 拖拽框选 → R保存参考图 | Space 取点击坐标 → 生成YAML")
+        self.info_var = tk.StringVar(
+            value="按 F5 截取当前屏幕" if not image_path
+            else "悬停查看坐标 | 拖拽框选 → R保存参考图 | Space 生成代码"
+        )
         tk.Label(self.root, textvariable=self.info_var, font=("", 13), pady=6).pack()
 
-        # 操作提示
         tk.Label(self.root,
-                 text="R=保存参考图  C=复制区域坐标  T=复制点击坐标  Space=生成YAML  ESC=退出",
+                 text="F5=截屏  R=保存参考图  C=复制区域坐标  T=复制点击坐标  Space=生成代码  ESC=退出",
                  font=("", 11), fg="gray").pack(pady=(0, 2))
 
-        # 坐标输入栏：粘贴 [l,t,r,b] 回车高亮并定位
         input_frame = tk.Frame(self.root)
         input_frame.pack(pady=(0, 4))
         tk.Label(input_frame, text="坐标:", font=("", 11)).pack(side=tk.LEFT)
         self.coord_entry = tk.Entry(input_frame, width=40, font=("", 11))
         self.coord_entry.pack(side=tk.LEFT, padx=(4, 4))
         self.coord_entry.bind("<Return>", self._on_coord_enter)
-        tk.Label(input_frame, text="例: [100,200,300,400]", font=("", 10), fg="gray").pack(side=tk.LEFT)
+        tk.Label(input_frame, text="例: (100,200,300,400)", font=("", 10), fg="gray").pack(side=tk.LEFT)
 
-        # 选中状态
         self.start_x = self.start_y = None
         self.rect_id = None
         self.point_id = None
 
-        # 事件绑定
         self.canvas.bind("<Motion>", self.on_move)
         self.canvas.bind("<ButtonPress-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
         self.canvas.bind("<Control-ButtonPress-1>", self.on_pan_start)
         self.canvas.bind("<Control-B1-Motion>", self.on_pan)
-        # macOS 滚轮：同时绑定 root 和 canvas，兼容不同 Tk 版本
         self.root.bind("<MouseWheel>", self.on_zoom)
         self.canvas.bind("<MouseWheel>", self.on_zoom)
         self.root.bind("<Button-4>", lambda e: self._zoom_step(1.1))
@@ -101,33 +111,114 @@ class ScreenTool:
         self.root.bind("<r>", lambda e: self._save_crop())
         self.root.bind("<c>", lambda e: self._copy_region())
         self.root.bind("<t>", lambda e: self._copy_click())
-        self.root.bind("<space>", lambda e: self._gen_click_action())
+        self.root.bind("<space>", lambda e: self._gen_action())
         self.root.bind("<Escape>", lambda e: self.root.destroy())
 
         self._pan_x = self._pan_y = None
-        self._saved_region = None   # 最近一次框选区域 (left, top, right, bottom)
-        self._last_click = None     # 最近一次点击坐标 (x, y)
+        self._saved_region = None
+        self._last_click = None
+
+        if not image_path:
+            self._start_hotkey_listener()
+            self._poll_capture()
+
+    def _placeholder_image(self) -> Image.Image:
+        """创建一个占位图。"""
+        w, h = 800, 600
+        img = Image.new("RGB", (w, h), (40, 40, 40))
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+        draw.text((w // 2 - 120, h // 2 - 10), "按 F5 截取屏幕",
+                  fill=(180, 180, 180))
+        return img
+
+    def _start_hotkey_listener(self) -> None:
+        """在后台线程中启动热键监听。"""
+        def on_press(key: keyboard.Key | keyboard.KeyCode | None) -> None:
+            try:
+                k = key.name if hasattr(key, "name") else key.char
+            except AttributeError:
+                return
+            if k == "f5":
+                self._capture_screen()
+
+        self._listener = keyboard.Listener(on_press=on_press)
+        self._listener.daemon = True
+        self._listener.start()
+
+    def _capture_screen(self) -> None:
+        """截取全屏并将图片放入队列。"""
+        try:
+            img = ImageGrab.grab()
+            self._capture_queue.put(img)
+        except Exception as e:
+            self._capture_queue.put(e)
+
+    def _poll_capture(self) -> None:
+        """定时检查截图队列，有新的则更新显示。"""
+        try:
+            while True:
+                item = self._capture_queue.get_nowait()
+                if isinstance(item, Image.Image):
+                    self._load_new_image(item)
+                    self.root.title("坐标工具 — 按 F5 重新截取")
+                    self.info_var.set(
+                        f"截图已加载: {item.width}×{item.height} "
+                        "— 悬停查看坐标 | 框选操作"
+                    )
+                elif isinstance(item, Exception):
+                    self.info_var.set(f"截图失败: {item}")
+        except queue.Empty:
+            pass
+        self.root.after(200, self._poll_capture)
+
+    def _load_new_image(self, img: Image.Image) -> None:
+        """加载新的截图并自动缩放以适配窗口。"""
+        self.pil_image = img
+        self.orig_w = img.width
+        self.orig_h = img.height
+
+        # 自动计算缩放比使图片适配窗口
+        win_w = self.canvas.winfo_width()
+        win_h = self.canvas.winfo_height()
+        if win_w > 1 and win_h > 1:
+            self.scale = min(win_w / self.orig_w, win_h / self.orig_h, 1.0)
+        else:
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+            self.scale = min(screen_w / self.orig_w, screen_h / self.orig_h, 1.0)
+
+        self.rect_id = None
+        self.point_id = None
+        self._saved_region = None
+        self._last_click = None
+        self._rebuild_photo()
+
+    def _on_close(self) -> None:
+        if self._listener:
+            self._listener.stop()
+        self.root.destroy()
 
     # ---- 坐标转换 ----
-    def _to_orig(self, cx, cy):
+    def _to_orig(self, cx: float, cy: float) -> tuple[int, int]:
         return int(cx / self.scale), int(cy / self.scale)
 
-    def _to_canvas(self, ox, oy):
+    def _to_canvas(self, ox: int, oy: int) -> tuple[float, float]:
         return ox * self.scale, oy * self.scale
 
     # ---- 缩放 ----
-    def on_zoom(self, event):
+    def on_zoom(self, event: tk.Event) -> None:
         factor = 1.1 if event.delta > 0 else 0.9
         self._zoom_step(factor)
 
-    def _zoom_step(self, factor):
+    def _zoom_step(self, factor: float) -> None:
         new_scale = self.scale * factor
         if new_scale < 0.2 or new_scale > 3.0:
             return
         self.scale = new_scale
         self._rebuild_photo()
 
-    def _make_photo(self):
+    def _make_photo(self) -> None:
         if self.scale == 1.0:
             img = self.pil_image
         else:
@@ -138,19 +229,17 @@ class ScreenTool:
         self.scaled_w = self.photo.width()
         self.scaled_h = self.photo.height()
 
-    def _rebuild_photo(self):
+    def _rebuild_photo(self) -> None:
         self._make_photo()
         self.canvas.delete("all")
         self.canvas.configure(scrollregion=(0, 0, self.scaled_w, self.scaled_h))
         self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW, tags="bg")
-        self.rect_id = None
-        self.point_id = None
 
     # ---- 平移 ----
-    def on_pan_start(self, event):
+    def on_pan_start(self, event: tk.Event) -> None:
         self._pan_x, self._pan_y = event.x, event.y
 
-    def on_pan(self, event):
+    def on_pan(self, event: tk.Event) -> None:
         if self._pan_x is None:
             return
         dx = self._pan_x - event.x
@@ -160,13 +249,13 @@ class ScreenTool:
         self._pan_x, self._pan_y = event.x, event.y
 
     # ---- 鼠标交互 ----
-    def on_move(self, event):
+    def on_move(self, event: tk.Event) -> None:
         cx = self.canvas.canvasx(event.x)
         cy = self.canvas.canvasy(event.y)
         ox, oy = self._to_orig(cx, cy)
-        self.info_var.set(f"坐标: ({ox}, {oy})  — 悬停查看 | 拖拽框选 | R/C/Space 操作")
+        self.info_var.set(f"坐标: ({ox}, {oy})  — 悬停查看 | 拖拽框选 | F5截屏")
 
-    def on_press(self, event):
+    def on_press(self, event: tk.Event) -> None:
         cx = self.canvas.canvasx(event.x)
         cy = self.canvas.canvasy(event.y)
         self.start_x, self.start_y = self._to_orig(cx, cy)
@@ -174,17 +263,16 @@ class ScreenTool:
             self.canvas.delete(self.rect_id)
             self.rect_id = None
 
-    def on_drag(self, event):
+    def on_drag(self, event: tk.Event) -> None:
         cx = self.canvas.canvasx(event.x)
         cy = self.canvas.canvasy(event.y)
-        ox, oy = self._to_orig(cx, cy)
         sx, sy = self._to_canvas(self.start_x, self.start_y)
         if self.rect_id:
             self.canvas.delete(self.rect_id)
-        self.rect_id = self.canvas.create_rectangle(sx, sy, cx, cy,
-                                                     outline="lime", width=2)
+        self.rect_id = self.canvas.create_rectangle(
+            sx, sy, cx, cy, outline="lime", width=2)
 
-    def on_release(self, event):
+    def on_release(self, event: tk.Event) -> None:
         cx = self.canvas.canvasx(event.x)
         cy = self.canvas.canvasy(event.y)
         ox, oy = self._to_orig(cx, cy)
@@ -194,21 +282,22 @@ class ScreenTool:
         top, bottom = sorted([y1, y2])
 
         if abs(x2 - x1) < 5 and abs(y2 - y1) < 5:
-            # 点击行为：记录坐标
             self._last_click = (self.start_x, self.start_y)
             self._draw_point(self.start_x, self.start_y)
-            self.info_var.set(f"点击坐标: ({self.start_x}, {self.start_y}) — 按 T 复制坐标，按 Space 生成 YAML")
+            self.info_var.set(
+                f"点击坐标: ({self.start_x}, {self.start_y}) — 按 T 复制坐标，按 Space 生成代码")
             self._saved_region = None
         else:
-            # 框选行为：记录区域
             self._saved_region = (left, top, right, bottom)
             self._last_click = None
-            self.info_var.set(f"区域: [{left}, {top}, {right}, {bottom}]  "
-                              f"({right - left}x{bottom - top}) — 按R保存参考图，按C复制坐标")
+            self.info_var.set(
+                f"区域: ({left}, {top}, {right}, {bottom})  "
+                f"({right - left}×{bottom - top}) — R保存参考图 C复制坐标")
 
-    def _draw_point(self, x, y):
+    def _draw_point(self, x: int, y: int) -> None:
         if self.point_id:
-            for pid in (self.point_id if isinstance(self.point_id, tuple) else [self.point_id]):
+            for pid in (self.point_id if isinstance(self.point_id, tuple)
+                        else [self.point_id]):
                 self.canvas.delete(pid)
         r = max(8, int(10 / self.scale))
         sx, sy = self._to_canvas(x, y)
@@ -217,7 +306,7 @@ class ScreenTool:
         self.point_id = (p1, p2)
 
     # ---- 操作 ----
-    def _save_crop(self):
+    def _save_crop(self) -> None:
         if not self._saved_region:
             self.info_var.set("请先拖拽框选区域")
             return
@@ -227,7 +316,6 @@ class ScreenTool:
         out_dir = Path("images")
         out_dir.mkdir(exist_ok=True)
 
-        # 自动命名
         n = 1
         while (out_dir / f"ref_{n}.png").exists():
             n += 1
@@ -235,28 +323,27 @@ class ScreenTool:
         crop.save(path)
         self.info_var.set(f"已保存参考图: {path}")
 
-    def _copy_region(self):
+    def _copy_region(self) -> None:
         if not self._saved_region:
             self.info_var.set("请先拖拽框选区域")
             return
         left, top, right, bottom = self._saved_region
-        text = f"[{left}, {top}, {right}, {bottom}]"
+        text = f"({left}, {top}, {right}, {bottom})"
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.info_var.set(f"已复制到剪贴板: {text}")
 
-    def _copy_click(self):
+    def _copy_click(self) -> None:
         if not self._last_click:
             self.info_var.set("请先点击取坐标")
             return
         x, y = self._last_click
-        text = f"[{x}, {y}]"
+        text = f"({x}, {y})"
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.info_var.set(f"已复制点击坐标到剪贴板: {text}")
 
-    def _on_coord_enter(self, event):
-        """粘贴坐标后回车：高亮矩形区域并缩放到合适大小。"""
+    def _on_coord_enter(self, _event: tk.Event) -> None:
         raw = self.coord_entry.get().strip()
         try:
             parts = [int(x.strip()) for x in raw.strip("[]()").split(",")]
@@ -264,54 +351,47 @@ class ScreenTool:
                 raise ValueError
             left, top, right, bottom = parts
         except (ValueError, TypeError):
-            self.info_var.set("格式错误，示例: [100,200,300,400]")
+            self.info_var.set("格式错误，示例: (100,200,300,400)")
             return
 
-        # 检查坐标合理性
         if left >= right or top >= bottom:
             self.info_var.set(f"坐标无效: ({left},{top},{right},{bottom})")
             return
 
         self._saved_region = (left, top, right, bottom)
         w, h = right - left, bottom - top
-
-        # 先缩放到合适大小（会重建画布），再画高亮框
         self._fit_region(left, top, w, h)
         self._draw_rect(left, top, right, bottom)
-        self.info_var.set(f"定位到 [{left}, {top}, {right}, {bottom}]  ({w}x{h})")
+        self.info_var.set(f"定位到 ({left}, {top}, {right}, {bottom})  ({w}×{h})")
 
-    def _draw_rect(self, left, top, right, bottom):
-        """在画布上绘制绿色高亮矩形。"""
+    def _draw_rect(self, left: int, top: int, right: int, bottom: int) -> None:
         if self.rect_id:
             self.canvas.delete(self.rect_id)
         sl, st = self._to_canvas(left, top)
         sr, sb = self._to_canvas(right, bottom)
-        self.rect_id = self.canvas.create_rectangle(sl, st, sr, sb, outline="lime", width=3)
+        self.rect_id = self.canvas.create_rectangle(
+            sl, st, sr, sb, outline="lime", width=3)
 
-    def _fit_region(self, x, y, w, h):
-        """调整缩放和滚动，使指定区域在画布中可见。"""
+    def _fit_region(self, x: int, y: int, w: int, h: int) -> None:
         canvas_w = self.canvas.winfo_width()
         canvas_h = self.canvas.winfo_height()
         if canvas_w <= 1 or canvas_h <= 1:
             return
 
-        # 计算合适的缩放比
         margin = 0.85
         scale_x = canvas_w / max(w, 1) * margin
         scale_y = canvas_h / max(h, 1) * margin
         self.scale = min(scale_x, scale_y, 3.0)
         self._rebuild_photo()
 
-        # 滚动使区域居中
         cx = (x + w / 2) * self.scale
         cy = (y + h / 2) * self.scale
         self.canvas.xview_moveto(max(0, (cx - canvas_w / 2) / self.scaled_w))
         self.canvas.yview_moveto(max(0, (cy - canvas_h / 2) / self.scaled_h))
 
-    def _gen_click_action(self):
-        """生成 YAML 动作片段并打印到终端。"""
+    def _gen_action(self) -> None:
+        """生成 Python DSL 代码片段并打印到终端。"""
         if self._saved_region:
-            # 框选了区域 → 生成 match_click
             ref = ""
             idx = 1
             while (Path("images") / f"ref_{idx}.png").exists():
@@ -324,42 +404,42 @@ class ScreenTool:
             cy = (top + bottom) // 2
 
             snippet = f"""
-- action: match_click
-  name: ""
-  match_region: [{left}, {top}, {right}, {bottom}]
-  reference: "{ref or 'images/xxx.png'}"
-  threshold: 0.85
-  target: [{cx}, {cy}]
-  max_retries: 30
-  interval: 1
-  wait_after: 1
+    img = MyImages()
+    # ...
+    @step(match=img.xxx, region=({left}, {top}, {right}, {bottom}))
+    def action(self):
+        self.click({cx}, {cy})
+        self.wait(1)
 """
         elif self._last_click:
             x, y = self._last_click
             snippet = f"""
-- action: click
-  name: ""
-  target: [{x}, {y}]
-  wait_after: 1
+    self.click({x}, {y})
+    self.wait(1)
 """
         else:
             self.info_var.set("请先框选区域或点击取坐标")
             return
 
         print("\n" + "=" * 50)
-        print("复制以下内容到 plans/*.yaml:")
+        print("复制以下代码到流程文件:")
         print("=" * 50)
         print(snippet)
-        self.info_var.set("已生成 YAML 片段（见终端输出）")
+        self.info_var.set("已生成 Python DSL 代码片段（见终端输出）")
 
-    def run(self):
+    def run(self) -> None:
         self.root.mainloop()
+        if self._listener:
+            self._listener.stop()
 
 
 if __name__ == "__main__":
-    img = sys.argv[1] if len(sys.argv) > 1 else "screen.png"
-    if not Path(img).exists():
-        print(f"错误: 图片 {img} 不存在")
-        print("请先截图: python -c \"from PIL import ImageGrab; ImageGrab.grab().save('screen.png')\"")
-        sys.exit(1)
-    ScreenTool(img).run()
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+        if not Path(path).exists():
+            print(f"错误: 图片 {path} 不存在")
+            sys.exit(1)
+        ScreenTool(path).run()
+    else:
+        print("坐标辅助工具已启动 — 按 F5 截取当前屏幕")
+        ScreenTool().run()

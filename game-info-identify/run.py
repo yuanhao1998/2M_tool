@@ -4,6 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from conf.log import add_log
+add_log()
+
 
 def run_diamonds():
     print("\n— 钻石识别统计 —")
@@ -12,63 +15,70 @@ def run_diamonds():
     print("  3. 校准截图")
     choice = input("请选择 (1/2/3): ").strip()
 
-    argv = [sys.executable, "main.py"]
-    if choice == "2":
-        argv.append("--test")
-    elif choice == "3":
-        argv.append("--calibrate")
+    if choice == "1":
+        argv = [sys.executable, "flows/diamond_stats.py"]
+    else:
+        argv = [sys.executable, "main.py"]
+        if choice == "2":
+            argv.append("--test")
+        elif choice == "3":
+            argv.append("--calibrate")
 
-    config = input("配置文件 (回车默认 config.yaml): ").strip()
-    if config:
-        argv.extend(["--config", config])
+    if choice != "1":
+        config = input("配置文件 (回车默认 config.yaml): ").strip()
+        if config:
+            argv.extend(["--config", config])
 
     print()
     subprocess.run(argv)
 
 
-def run_plan():
-    plans_dir = Path("plans")
-    if plans_dir.exists():
-        files = sorted(plans_dir.glob("*.yaml"))
+def run_flow():
+    flows_dir = Path("flows")
+    if flows_dir.exists():
+        files = sorted(flows_dir.glob("*.py"))
         if files:
             print("\n— 可用流程 —")
             for i, f in enumerate(files, 1):
-                print(f"  {i}. {f.name}")
+                print(f"  {i}. {f.stem}")
             print(f"  0. 手动输入路径")
             choice = input("请选择: ").strip()
             if choice == "0":
-                plan = input("规划文件路径: ").strip()
+                flow = input("流程文件路径: ").strip()
             else:
                 try:
-                    plan = str(files[int(choice) - 1])
+                    flow = str(files[int(choice) - 1])
                 except (ValueError, IndexError):
                     print("无效选择")
                     return
         else:
-            plan = input("规划文件路径: ").strip()
+            flow = input("流程文件路径: ").strip()
     else:
-        plan = input("规划文件路径: ").strip()
+        flow = input("流程文件路径: ").strip()
 
-    if not plan or not Path(plan).exists():
-        print(f"文件不存在: {plan}")
+    if not flow or not Path(flow).exists():
+        print(f"文件不存在: {flow}")
         return
 
-    repeat = input("覆盖轮数 (回车使用文件中配置): ").strip()
-    argv = [sys.executable, "planner.py", plan]
-    if repeat.isdigit():
-        argv.extend(["--repeat", repeat])
+    argv = [sys.executable, flow]
 
     print()
     subprocess.run(argv)
 
 
 def run_screen():
-    img = input("截图路径 (回车 screen.png): ").strip() or "screen.png"
-    if not Path(img).exists():
-        print(f"图片不存在: {img}")
-        print("请先截图: python -c \"from PIL import ImageGrab; ImageGrab.grab().save('screen.png')\"")
-        return
-    subprocess.run([sys.executable, "screen_tool.py", img])
+    print("\n  1. 实时截图模式（按 F5 截屏）")
+    print("  2. 打开已有截图")
+    choice = input("请选择 (1/2): ").strip()
+
+    if choice == "2":
+        img = input("截图路径: ").strip()
+        if not Path(img).exists():
+            print(f"图片不存在: {img}")
+            return
+        subprocess.run([sys.executable, "tools/screen_tool.py", img])
+    else:
+        subprocess.run([sys.executable, "tools/screen_tool.py"])
 
 
 def main():
@@ -86,7 +96,7 @@ def main():
     if choice == "1":
         run_diamonds()
     elif choice == "2":
-        run_plan()
+        run_flow()
     elif choice == "3":
         run_screen()
     elif choice == "0":

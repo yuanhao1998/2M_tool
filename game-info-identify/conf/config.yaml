@@ -1,0 +1,35 @@
+# 运行时配置
+
+logging:
+  level: INFO          # DEBUG | INFO | WARNING | ERROR
+
+wait:
+  jitter: 0.5            # 基础抖动比例，0=精确等待
+  long_pause_prob: 0.01  # 长时间"走神"概率 (0~1)
+  long_pause_min: 2.0    # 长时间等待的基础倍数下限
+  long_pause_max: 60.0   # 长时间等待的基础倍数上限
+
+mouse:
+  move_duration: 0.15              # 单次移动基础耗时（秒），0=瞬移
+  move_duration_jitter: 0.5        # 移动耗时抖动比例
+  move_jitter: 200                 # 贝塞尔控制点随机偏移（像素）
+  overshoot_prob: 0.6              # 过冲概率：鼠标冲过头再滑回来
+  overshoot_range: 40              # 过冲距离上限（像素）
+  drag_release_early_prob: 0    # 滑动中途松手概率（模拟不完整滑动）
+
+hotkeys:
+  start: f5
+  pause: f6
+  stop: f7
+  exit: esc
+
+capture:
+  diamond_region: [2291, 127, 2475, 237]
+  name_region: [14, 14, 82, 56]
+
+switch:
+  next_button: [5077, 1136]
+  wait_after_switch: 2.0
+
+stats:
+  total_accounts: 73

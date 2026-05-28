@@ -1,12 +1,34 @@
 # 使用指南
 
+## 快速启动
+
+```bash
+python run.py         # 交互式菜单选择功能
+```
+
+菜单选项：
+1. 钻石识别统计
+2. 视觉自动化流程
+3. 坐标辅助工具
+
 ## 命令行参数
+
+### 主工具 (main.py)
 
 | 参数 | 说明 |
 |------|------|
 | `--calibrate` | 校准模式：截一张全屏图保存为 `calibrate.png` |
 | `--test` | 测试模式：截屏并识别，验证坐标配置是否准确 |
 | `--config <path>` | 指定配置文件路径，默认 `config.yaml` |
+
+### 自动化流程 (flows/*.py)
+
+| 选项 | 说明 |
+|------|------|
+| `main(debug=True)` | 每步打印匹配结果、耗时、坐标 |
+| `main(dry_run=True)` | 只验证不点击（安全检查） |
+| `main(start_step="name")` | 从指定步骤开始执行 |
+| `main(repeat=N)` | 设置循环轮数（覆盖文件中的默认值） |
 
 ## 运行模式
 
@@ -17,7 +39,7 @@
 python main.py --calibrate
 
 # 第二步：打开 GUI 校准工具框选区域
-python calibrate_tool.py calibrate.png
+python tools/calibrate_tool.py calibrate.png
 ```
 
 GUI 操作：
@@ -27,24 +49,34 @@ GUI 操作：
 - **空格** — 确认当前区域，进入下一步
 - **ESC** — 退出
 
-框选顺序：钻石数量区域 → 云机名称区域（可选） → 切换按钮位置。
-
 ### 测试模式
 
 ```bash
 python main.py --test
 ```
 
-会生成以下调试图片：
-- `test_fullscreen.png` — 完整截图
-- `test_marked.png` — 带红框标记的截图（确认裁剪区域正确）
-- `test_crop_raw.png` — 原始裁剪图
-- `test_crop_processed.png` — 预处理后的裁剪图
+生成调试图片：test_fullscreen.png、test_marked.png、test_crop_raw.png、test_crop_processed.png。
 
-### 正式运行
+### 钻石识别统计
 
 ```bash
-python main.py
+python flows/diamond_stats.py
+# 或通过 run.py 菜单选择
+```
+
+### 视觉自动化流程
+
+```bash
+# 直接运行
+python flows/shop.py        # 商城购买
+python flows/delegate.py     # 委托任务
+python flows/supply.py       # 补给购买
+
+# 或通过 run.py 菜单选择
+
+# 调试模式
+python flows/shop.py --debug
+python flows/shop.py --dry-run
 ```
 
 ## 热键
@@ -53,24 +85,40 @@ python main.py
 |------|------|
 | `F5` | 开始 / 继续 |
 | `F6` | 暂停 |
-| `F7` | 停止（统计结束） |
-| `ESC` | 紧急退出 |
+| `F7` | 停止 |
+| `ESC` | 退出 |
 
-可在 `config.yaml` 的 `hotkeys` 段自定义按键。
+可在流程文件中自定义热键。
 
-## 工作流程
+## 编写流程
 
-1. 按 `F5` 开始
-2. 程序截取全屏 → 裁剪钻石区域 → OCR 识别
-3. 裁剪名称区域 → OCR 识别云机名称
-4. 结果收集到内存列表
-5. 点击切换按钮 → 等待加载 → 重复步骤 2
-6. 处理完预设数量或按 `F7` 停止
-7. 停止后结果自动保存为 JSON
+```python
+from automation import AutomationFlow, ImageDir, step
+
+class MyImages(ImageDir):
+    path = "images/my_flow"
+
+img = MyImages()
+
+class MyFlow(AutomationFlow):
+    def switch_to_next(self):
+        self.click(5075, 1138)
+        self.wait(3)
+
+    @step(match=img.target, threshold=0.85)
+    def do_action(self):
+        self.click(100, 200)
+
+    def run(self):
+        self.do_action()
+
+if __name__ == "__main__":
+    MyFlow().main(repeat=10)
+```
 
 ## 输出文件
 
-停止后结果自动保存到 `data/` 目录，文件名为 `YYYY-MM-DD_N.json`（同一天多次运行序号递增）。
+结果自动保存到 `data/` 目录，文件名为 `YYYY-MM-DD_N.json`。
 
 ```json
 [
@@ -81,8 +129,7 @@ python main.py
 
 ## 调试
 
-当 OCR 识别不稳定时，截图会自动保存到 `debug_failures/` 目录：
-- `*_acctN_M_VALUE.png` — 第 N 个账户的第 M 次采样（VALUE 为识别结果）
-- `*_acctN_M_proc.png` — 对应的预处理图片
-
-可用于排查识别失败原因并调整预处理参数。
+- **OCR 不稳定**：截图自动保存到 `debug_failures/` 目录
+- **流程调试**：`pdb.set_trace()` 设置 Python 断点，`python -i flows/shop.py` 交互式 REPL
+- **匹配失败**：`--debug` 参数打印每步匹配置信度和坐标信息
+- **安全检查**：`--dry-run` 参数只验证不执行点击

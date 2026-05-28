@@ -28,8 +28,13 @@ def _get_reader() -> easyocr.Reader:
     global _reader
     if _reader is None:
         logger.info("正在加载 EasyOCR 模型（首次需下载，约 10-30 秒）...")
-        _reader = easyocr.Reader(["en"], gpu=False)
-        logger.info("EasyOCR 模型加载完成")
+        try:
+            _reader = easyocr.Reader(["ko"], gpu=True)
+            logger.info("EasyOCR 模型加载完成（GPU 模式，韩文）")
+        except Exception:
+            logger.warning("GPU 不可用，降级为 CPU 模式")
+            _reader = easyocr.Reader(["ko"], gpu=False)
+            logger.info("EasyOCR 模型加载完成（CPU 模式，韩文")
     return _reader
 
 
