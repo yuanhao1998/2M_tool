@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from automation import AutomationFlow, ImageDir
-from flows.common_define import SWITCH_CLICK, LOAD_CHECK, OPERATE_ERROR_TIP_CHECK, OPERATE_ERROR_TIP_CLICK
+from automation import ImageDir
+from flows.common_define import SWITCH_CLICK, LOAD_CHECK, OPERATE_ERROR_TIP_CHECK, OPERATE_ERROR_TIP_CLICK, CommonFlows
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ FISRT_TP_CONFIRM_CLICK = (1152, 1065, 1232, 1143)  # 确认点击第一个传送
 AUTO_ATTACK_CLICK = (4021, 1408, 4166, 1519)  # 开启自动攻击
 
 
-class SupplyFlow(AutomationFlow):
+class SupplyFlow(CommonFlows):
     """73 账户循环：回城 → 补给购买 → 传送回刷怪点 → 自动攻击。"""
 
     def switch_to_next(self) -> None:
@@ -64,12 +64,7 @@ class SupplyFlow(AutomationFlow):
     def run(self) -> None:
         logger.info("=== 账户 %d [%s] 开始 ===", self._current_account, self.device_name)
         
-        tip_saerch = self.find_text("확인", TIP_CHECK)
-        self.wait(2)
-        if tip_saerch.found:
-            logger.info("发现有提示弹框，关闭")
-            self.click(*self.text_region(tip_saerch.center, 227, 55, 227, 55))  # 关闭提示弹框
-            self.wait(2)
+        self.close_tip()
 
         logger.info("点击回城")
         self.click(*RETURN_CLICK)

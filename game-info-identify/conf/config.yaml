@@ -5,7 +5,7 @@ logging:
 
 wait:
   jitter: 0.5            # 基础抖动比例，0=精确等待
-  long_pause_prob: 0.01  # 长时间"走神"概率 (0~1)
+  long_pause_prob: 0.0  # 长时间"走神"概率 (0~1)
   long_pause_min: 2.0    # 长时间等待的基础倍数下限
   long_pause_max: 60.0   # 长时间等待的基础倍数上限
 

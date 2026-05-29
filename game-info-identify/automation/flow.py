@@ -361,31 +361,38 @@ class AutomationFlow:
                          region: tuple[int, int, int, int] | None = None,
                          threshold: float = 0.85,
                          max_clicks: int = 50,
-                         interval: float = 1.0) -> bool:
-        """反复点击直到指定图片消失。
+                         interval: float = 1.0,
+                         stable_wait: float = 5.0) -> bool:
+        """反复点击直到指定图片稳定消失。
 
-        用于关闭弹窗/广告等场景：先检查图片是否存在，
-        若存在则点击关闭按钮，循环直到图片消失。
+        图片消失后等待 stable_wait 秒再次确认，防止弹框消失后
+        立即再次弹出。
 
         Args:
             match_image: 需要消除的参考图。
-            click_pos: 关闭按钮坐标 (x, y)。
+            click_pos: 关闭按钮坐标 (x, y) 或区域 (l,t,r,b)。
             region: 匹配搜索区域。
             threshold: 匹配置信度阈值。
             max_clicks: 最大点击次数。
             interval: 点击间隔（秒）。
+            stable_wait: 消失后稳定等待时间（秒），再次检查确认已消失。
 
         Returns:
-            True 表示图片已消失，False 表示超过最大点击次数。
+            True 表示图片已稳定消失，False 表示超过最大点击次数。
         """
         for _ in range(max_clicks):
             self._check_state()
             r = self.find(match_image, region=region, threshold=threshold)
             if not r.matched:
-                return True
+                # 稳定确认：等待后再检查一次，防止弹框又弹出
+                self.wait(stable_wait)
+                r2 = self.find(match_image, region=region, threshold=threshold)
+                if not r2.matched:
+                    return True
+                logger.debug("click_until_gone: 图片消失后又出现，继续点击")
             self.click(*click_pos)
             self.wait(interval)
-        logger.warning("click_until_gone: %d 次点击后仍未消失", max_clicks)
+        logger.warning("click_until_gone: %d 次点击后仍未稳定消失", max_clicks)
         return False
 
     def find_text(self, text: str, region: tuple[int, int, int, int] | None = None) -> TextResult:
