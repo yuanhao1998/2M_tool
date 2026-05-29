@@ -27,8 +27,9 @@ def _keep_cursor_visible() -> None:
         pyautogui.moveTo(x, y, duration=0.005)
 
 _scale_cache: float | None = None
+_res_cache: tuple[float, float] | None = None  # (宽缩放比, 高缩放比)
 _config: dict = {}
-_last_logical: tuple[int, int] | None = None  # 记录上一次鼠标位置
+_last_logical: tuple[int, int] | None = None
 
 
 def _get_scale() -> float:
@@ -39,6 +40,34 @@ def _get_scale() -> float:
         _scale_cache = screenshot_w / logical_w
         logger.info("屏幕缩放比: %.1fx (截图%dpx / 逻辑%dlp)", _scale_cache, screenshot_w, logical_w)
     return _scale_cache
+
+
+def _get_resolution_scale() -> tuple[float, float]:
+    """获取跨分辨率缩放比，使一套坐标适配不同分辨率机器。"""
+    global _res_cache
+    if _res_cache is None:
+        cfg = _load_config()
+        screen_cfg = _load_full_config().get("screen", {})
+        base_w = float(screen_cfg.get("base_width", 5120))
+        base_h = float(screen_cfg.get("base_height", 0))
+        actual_w = ImageGrab.grab().width
+        actual_h = ImageGrab.grab().height
+        scale_w = actual_w / base_w
+        scale_h = actual_h / base_h if base_h > 0 else scale_w
+        _res_cache = (scale_w, scale_h)
+        logger.info("分辨率缩放: %.2fx / %.2fx (实际%dx%d → 基准%dx%d)",
+                     scale_w, scale_h, actual_w, actual_h, int(base_w), int(base_h))
+    return _res_cache
+
+
+def _load_full_config() -> dict:
+    """加载完整 config.yaml 配置。"""
+    cfg_path = Path("conf/config.yaml")
+    if cfg_path.exists():
+        yaml = YAML(typ="safe")
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            return yaml.load(f) or {}
+    return {}
 
 
 def _load_config() -> dict:
@@ -55,8 +84,10 @@ def _load_config() -> dict:
 
 
 def _to_logical(x: int, y: int) -> tuple[int, int]:
+    """物理像素坐标 → 逻辑坐标，自动适配 Retina + 跨分辨率缩放。"""
     scale = _get_scale()
-    return round(x / scale), round(y / scale)
+    rs_w, rs_h = _get_resolution_scale()
+    return round(x * rs_w / scale), round(y * rs_h / scale)
 
 
 def click(*args: int) -> None:

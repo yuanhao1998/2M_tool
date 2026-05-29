@@ -131,17 +131,30 @@ class AutomationFlow:
             raise StopFlow
 
     # -- 屏幕操作 --
+    def _scale_region(self, region: tuple[int, int, int, int] | None) -> tuple[int, int, int, int] | None:
+        """将基准分辨率坐标转换为实际屏幕坐标。"""
+        if region is None:
+            return None
+        try:
+            from core.mouse import _get_resolution_scale
+            rs_w, rs_h = _get_resolution_scale()
+        except Exception:
+            return region
+        return (round(region[0] * rs_w), round(region[1] * rs_h),
+                round(region[2] * rs_w), round(region[3] * rs_h))
+
     def screenshot(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         """截取全屏或指定区域。
 
         Args:
-            region: 裁剪区域 [left, top, right, bottom]，None 表示全屏。
+            region: 裁剪区域 [left, top, right, bottom]（基准分辨率），None 表示全屏。
 
         Returns:
             PIL Image 对象。
         """
         self._check_state()
         img = fullscreen_screenshot()
+        region = self._scale_region(region)
         if region:
             img = _crop_region(img, region)
         return img

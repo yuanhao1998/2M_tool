@@ -1,5 +1,9 @@
 # 运行时配置
 
+screen:
+  base_width: 5120     # 坐标设计参考分辨率（宽）
+  base_height: 2880    # 坐标设计参考分辨率（高），0=仅按宽度缩放
+
 logging:
   level: INFO          # DEBUG | INFO | WARNING | ERROR
 
