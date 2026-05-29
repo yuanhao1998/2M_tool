@@ -261,6 +261,18 @@ class AutomationFlow:
             return image_ref
         else:
             raise TypeError(f"不支持的图片类型: {type(image_ref)}")
+
+        # 跨分辨率缩放参考图
+        try:
+            from core.mouse import _get_resolution_scale
+            rs_w, rs_h = _get_resolution_scale()
+            if rs_w != 1.0 or rs_h != 1.0:
+                nw = max(1, round(pil.width * rs_w))
+                nh = max(1, round(pil.height * rs_h))
+                pil = pil.resize((nw, nh), Image.LANCZOS)
+        except Exception:
+            pass
+
         return cv2.cvtColor(np.array(pil.convert("RGB")), cv2.COLOR_RGB2BGR)
 
     def _screen_bgr(self, region: tuple[int, int, int, int] | None = None) -> np.ndarray:
