@@ -14,6 +14,7 @@ OPERATE_ERROR_TIP_CHECK = (2146, 1792, 2927, 1972)
 OPERATE_ERROR_TIP_CLICK = (2209, 1816, 2838, 1944)
 
 TIP_CHECK = (173, 792, 1343, 1536)  # 左上角提示寻找
+RANDOM_TP_CLICK = (4729, 2439, 4835, 2547)  # 随机传送
 
 
 logger = logging.getLogger(__name__)
@@ -41,3 +42,7 @@ class CommonFlows(AutomationFlow):
             logger.info("发现有提示弹框，关闭")
             self.click(*self.text_region(tip_saerch.center, 227, 55, 227, 55))  # 关闭提示弹框
             self.wait(2)
+    
+    def random_tp(self):
+        self.click(*RANDOM_TP_CLICK)
+        self.wait(2)

@@ -114,6 +114,7 @@ class DelegateFlow(CommonFlows):
         if self.wait_match(common.loaded, region=LOAD_CHECK, timeout=30).matched:
             self.wait(2)
             logger.info("传送完成")
+            self.random_tp()
         
         self.__open_task()
         self.wait_match(delegate.task_success_check, region=TASK_SUCCESS_CHECK, timeout=200)
