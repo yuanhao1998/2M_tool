@@ -7,8 +7,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from automation import ImageDir
 from flows.common_define import LOAD_CHECK, OPERATE_ERROR_TIP_CHECK, OPERATE_ERROR_TIP_CLICK, CommonFlows
-
-
+from conf.log import add_log
+add_log(__name__ + '.log')
 logger = logging.getLogger(__name__)
 
 class DelegateImages(ImageDir):
@@ -21,7 +21,7 @@ class CommonImages(ImageDir):
 delegate = DelegateImages()
 common = CommonImages()
 
-TASK_ICON_CLICK = (4540, 159, 4586, 214)  # 点击任务图标
+TASK_ICON_CLICK = (4520, 165, 4568, 204)  # 点击任务图标
 TASK_PANEL_CHECK = (1180, 410, 1289, 514)  # 判断任务面板是否打开
 
 TASK_CHANGE_CLICK = (1204, 435, 1475, 502)  # 切换横排任务面板到第二栏
@@ -54,13 +54,22 @@ class DelegateFlow(CommonFlows):
     """73 账户循环：打开任务 → 判断完成/进行中 → 领取或传送。"""
 
     def run(self) -> None:
-    
-        self.__open_task()
+        
+        try:
+            self.__open_task()
+        except ValueError:
+            self.__go_AFK()
+            return
         logger.info("切换到35任务面板")
-
+        
         while True:
             if self.find(delegate.task_exec_button, region=TASK_EXEC_CHECK).matched:  # 有任务执行按钮，未完成
-                self.__exec_task()
+                try:
+                    self.__exec_task()
+                except ValueError:
+                    self.__go_AFK()
+                    return
+                
             elif self.find(delegate.task_success_check, region=TASK_SUCCESS_CHECK).matched:  # 有领取奖励按钮，已完成
                 self.__get_rewards()
             else:  # 没有任务
@@ -69,80 +78,98 @@ class DelegateFlow(CommonFlows):
 
         self.__close_task()
         logger.info("关闭任务面板")
-        self.wait(2)
+        self.wait(5)
         self.__go_AFK()
-        self.wait(2)
+        self.wait(5)
 
     def __close_tip(self):
         tip_saerch = self.find_text("확인", TIP_CHECK)
-        self.wait(2)
+        self.wait(5)
         if tip_saerch.found:
             logger.info("发现有提示弹框，关闭")
             self.click(*self.text_region(tip_saerch.center, 227, 55, 227, 55))  # 关闭提示弹框
-            self.wait(2)
+            self.wait(5)
 
     def __open_task(self):  # 打开任务
 
         self.click(*TASK_ICON_CLICK)  # 点击任务列表
         logger.info("点击任务图标")
-        self.wait(3)
+        self.wait(5)
 
-        if self.wait_match(delegate.task_panel_check, region=TASK_PANEL_CHECK):
-            logger.info("成功打开任务面板")
+        for i in range(3):
+            if self.wait_match(delegate.task_panel_check, region=TASK_PANEL_CHECK, timeout=8).matched:
+                logger.info("成功打开任务面板")
+                break
+            self.click(*TASK_ICON_CLICK)  # 点击任务列表
+            logger.info("点击任务图标，次数：%s" % i)
         else:
             logger.error("%s：打开任务面板失败" % self.device_name)
-            return
+            raise ValueError
         
         self.click(*TASK_CHANGE_CLICK)  # 切换横排面板2
-        self.wait(2)
+        self.wait(5)
         self.click(*TASK_CHANGE_CLICK2)  # 切换横排小面板2
-        self.wait(2)
+        self.wait(5)
         self.click(*SELECT_CLICK)  # 打开下拉框
-        self.wait(2)
+        self.wait(5)
         self.click(*TASK_35_CLICK)  # 选择35任务
-        self.wait(2)
+        self.wait(5)
         self.click(*FIRST_TASK_CLICK)  # 选中第一个任务
-        self.wait(2)
+        self.wait(5)
+        logger.info("选择到委托任务")
     
     def __exec_task(self):  # 执行任务
-        self.wait(2)
+        self.wait(5)
         self.click(*TASK_EXEC_CLICK)  # 点击执行任务
-        self.wait(2)
+        self.wait(5)
         self.click(*TASK_EXEC_CONFIRM)  # 确认执行
-        self.wait(2)
+        self.wait(5)
 
         if self.wait_match(common.loaded, region=LOAD_CHECK, timeout=30).matched:
-            self.wait(2)
+            self.wait(5)
             logger.info("传送完成")
-            self.random_tp()
         
         self.__open_task()
-        self.wait_match(delegate.task_success_check, region=TASK_SUCCESS_CHECK, timeout=200)
+
+        for _ in range(10):
+            if self.wait_match(delegate.task_success_check, region=TASK_SUCCESS_CHECK, timeout=30).matched:
+                break
+            self.click(*FIRST_TASK_CLICK)
+            self.wait(5)
+            self.click(*TASK_EXEC_CLICK)  # 点击执行任务
+            self.wait(5)
+            self.click(*TASK_EXEC_CONFIRM)  # 确认执行
+            self.wait(5)
+            if self.wait_match(common.loaded, region=LOAD_CHECK, timeout=30).matched:
+                logger.info("传送完成")
+                self.wait(10)
+                self.random_tp()
+            self.__open_task()
     
     def __get_rewards(self):  # 领取奖励
-        self.wait(2)
+        self.wait(5)
         self.click(*REWARDS_CLICK)  # 点击领取奖励
-        self.wait(3)
+        self.wait(5)
         self.click(*REWARDS_SELECT)  # 选择奖励
 
-        self.wait(2)
+        self.wait(5)
         if self.find(delegate.rewards_tip_check, region=REWARDS_TIP_CHECK).matched:
             self.click(*REWARDS_TIP_CLOSE_CLICK)
-            self.wait(2)
+            self.wait(5)
 
         logger.info("检查并关闭报错弹框")
         self.click_until_gone(common.operate_error_tip, region=OPERATE_ERROR_TIP_CHECK,
                              click_pos=OPERATE_ERROR_TIP_CLICK, max_clicks=10, interval=2)
-        self.wait(3)
+        self.wait(5)
         self.click(*REWARDS_CLOSE)
         logger.info("关闭奖励弹框")
-        self.wait(2)
+        self.wait(5)
         self.click(*FIRST_TASK_CLICK)  # 再次选中第一个任务
         logger.info("再次选中第一个任务")
-        self.wait(2)
+        self.wait(5)
 
     def __close_task(self):  # 关闭任务面板
-        self.wait(2)
+        self.wait(5)
         self.click(*TASK_CLOSE)
 
     def __go_AFK(self):
@@ -152,22 +179,20 @@ class DelegateFlow(CommonFlows):
         if not self.find(common.tp_list_check, region=TP_LIST_CHECK).matched:
             logger.info("打开传送列表")
             self.click(*TP_LIST_CLICK)
-            self.wait(1)
+            self.wait(5)
 
         logger.info("选择第一个传送点")
         self.click(*FIRST_TP_CLICK)
-        self.wait(1)
+        self.wait(5)
         logger.info("确认传送")
         self.click(*FISRT_TP_CONFIRM_CLICK)
-        self.wait(3)
+        self.wait(5)
         if self.wait_match(common.loaded, region=LOAD_CHECK, timeout=30).matched:
-            self.wait(1)
+            self.wait(5)
             logger.info("传送完成")
         else:
             logger.error("%s 传送到挂机点加载失败，请查看并手动操作", self.device_name)
 
 
 if __name__ == "__main__":
-    from conf.log import add_log
-    add_log(__name__ + '.log')
     DelegateFlow().main(repeat=64)

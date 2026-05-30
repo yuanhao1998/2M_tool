@@ -78,7 +78,7 @@ class FlowRunner:
                     break
                 flow._current_account = i + 1
                 flow._capture_device_name()
-                logger.info("--- 账户 %d/%d [%s] ---", flow._current_account, self._repeat, flow.device_name)
+                logger.info("------------------------------ 账户 %d/%d [%s] ------------------------------", flow._current_account, self._repeat, flow.device_name)
 
                 flow.run()
 
