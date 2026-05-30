@@ -13,7 +13,7 @@ NAME_REGION = (14, 14, 82, 56)
 OPERATE_ERROR_TIP_CHECK = (2146, 1792, 2927, 1972)
 OPERATE_ERROR_TIP_CLICK = (2209, 1816, 2838, 1944)
 
-TIP_CHECK = (531, 1113, 972, 1226)  # 左上角提示寻找
+TIP_CHECK = (173, 792, 1343, 1536)  # 左上角提示寻找
 
 
 logger = logging.getLogger(__name__)

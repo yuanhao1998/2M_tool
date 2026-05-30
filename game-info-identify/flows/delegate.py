@@ -21,32 +21,34 @@ class CommonImages(ImageDir):
 delegate = DelegateImages()
 common = CommonImages()
 
-TASK_ICON_CLICK = (4525, 141, 4601, 232)  # 点击任务图标
+TASK_ICON_CLICK = (4540, 159, 4586, 214)  # 点击任务图标
 TASK_PANEL_CHECK = (1180, 410, 1289, 514)  # 判断任务面板是否打开
 
-TASK_CHANGE_CLICK = (1113, 412, 1566, 525)  # 切换横排任务面板到第二栏
-TASK_CHANGE_CLICK2 = (980, 670, 1352, 759)  # 切换小横排任务面板到第二栏
-SELECT_CLICK = (175, 876, 1449, 983)  # 打开下拉框
-TASK_35_CLICK = (160, 1927, 1441, 2035)  # 点击35级任务
-FIRST_TASK_CLICK= (368, 1091, 933, 1245)  # 选择第一个任务
+TASK_CHANGE_CLICK = (1204, 435, 1475, 502)  # 切换横排任务面板到第二栏
+TASK_CHANGE_CLICK2 = (1054, 688, 1278, 741)  # 切换小横排任务面板到第二栏
+SELECT_CLICK = (430, 897, 1194, 962)  # 打开下拉框
+TASK_35_CLICK = (416, 1949, 1185, 2013)  # 点击35级任务
+FIRST_TASK_CLICK = (481, 1122, 820, 1214)  # 选择第一个任务
 
 TASK_EXEC_CHECK = (4147, 2439, 4900, 2630)  # 执行任务按钮匹配
 TASK_SUCCESS_CHECK = (3361, 2439, 4900, 2630)  # 领取奖励按钮匹配
 
-TASK_EXEC_CLICK = (4227, 2458, 4848, 2604)  # 点击执行任务
-TASK_EXEC_CONFIRM = (2623, 1810, 3257, 1946)  # 确认执行任务
+TASK_EXEC_CLICK = (4351, 2487, 4724, 2575)  # 点击执行任务
+TASK_EXEC_CONFIRM = (2750, 1837, 3130, 1919)  # 确认执行任务
 
-REWARDS_CLICK = (3620, 2467, 4874, 2602)  # 点击领取奖励
-REWARDS_SELECT = (2439, 1679, 2613, 1849)  # 选择奖励
-REWARDS_CLOSE = (2294, 2348, 2728, 2443)  # 关闭确认奖励
+REWARDS_CLICK = (3871, 2494, 4623, 2575)  # 点击领取奖励
+REWARDS_SELECT = (2474, 1713, 2578, 1815)  # 选择奖励
+REWARDS_TIP_CHECK = (2543, 1794, 3316, 1966)  # 判断奖励弹框
+REWARDS_TIP_CLOSE_CLICK = (2787, 1855, 3102, 1905)  # 关闭奖励弹框
+REWARDS_CLOSE = (2381, 2367, 2641, 2424)  # 关闭确认奖励
 
-TASK_CLOSE = (4779, 149, 4909, 269)  # 关闭任务面板
+TASK_CLOSE = (4805, 173, 4883, 245)  # 关闭任务面板
 
 TP_LIST_CHECK = (1011, 627, 1300, 768)  # 判断是否打开传送列表
-TP_LIST_CLICK = (963, 405, 1033, 494)  # 传送列表点击
-FIRST_TP_CLICK = (262, 859, 1250, 994)  # 点击第一个传送坐标
-FISRT_TP_CONFIRM_CLICK = (1152, 1065, 1232, 1143)  # 确认点击第一个传送坐标
-AUTO_ATTACK_CLICK = (4021, 1408, 4166, 1519)  # 开启自动攻击
+TP_LIST_CLICK = (977, 423, 1019, 476)  # 传送列表点击
+FIRST_TP_CLICK = (460, 886, 1052, 967)  # 点击第一个传送坐标
+FISRT_TP_CONFIRM_CLICK = (1168, 1081, 1216, 1127)  # 确认点击第一个传送坐标
+AUTO_ATTACK_CLICK = (4050, 1430, 4137, 1497)  # 开启自动攻击
 
 class DelegateFlow(CommonFlows):
     """73 账户循环：打开任务 → 判断完成/进行中 → 领取或传送。"""
@@ -121,6 +123,11 @@ class DelegateFlow(CommonFlows):
         self.click(*REWARDS_CLICK)  # 点击领取奖励
         self.wait(3)
         self.click(*REWARDS_SELECT)  # 选择奖励
+
+        self.wait(2)
+        if self.find(delegate.rewards_tip_check, region=REWARDS_TIP_CHECK).matched:
+            self.click(*REWARDS_TIP_CLOSE_CLICK)
+            self.wait(2)
 
         logger.info("检查并关闭报错弹框")
         self.click_until_gone(common.operate_error_tip, region=OPERATE_ERROR_TIP_CHECK,
